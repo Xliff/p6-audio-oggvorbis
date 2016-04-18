@@ -1,11 +1,11 @@
 unit module Vorbis;
 
 use NativeCall;
+use Audio::LibOggVorbis::Ogg;
 
-constant LIB = 'libvorbis';
+constant LIB = 'vorbis';
 
 # == /usr/include/vorbis/codec.h ==
-
 class vorbis_info is repr('CStruct') is export {
 	has int32                         $.version; # int version
 	has int32                         $.channels; # int channels
@@ -40,6 +40,11 @@ class vorbis_dsp_state is repr('CStruct') is export {
 	has Pointer                       $.backend_state; # void* backend_state
 }
 
+class alloc_chain is repr('CStruct') is export {
+	has Pointer                       $.ptr; 	# void* ptr
+	has alloc_chain                   $.next; 	# alloc_chain* next
+}
+
 class vorbis_block is repr('CStruct') is export {
 	has Pointer[Pointer[num32]]       $.pcm; # float** pcm
 	HAS oggpack_buffer                $.opb; # oggpack_buffer opb
@@ -64,22 +69,14 @@ class vorbis_block is repr('CStruct') is export {
 	has Pointer                       $.internal; # void* internal
 }
 
-class alloc_chain is repr('CStruct') is export {
-	has Pointer                       $.ptr; # void* ptr
-	has alloc_chain                   $.next; # alloc_chain* next
-}
-
+# cw: $.user_comments is probably going to be difficult, since it might
+#     be a CArray[Str]
 class vorbis_comment is repr('CStruct') is export {
 	has Pointer[Str]                  $.user_comments; # char** user_comments
 	has Pointer[int32]                $.comment_lengths; # int* comment_lengths
 	has int32                         $.comments; # int comments
 	has Str                           $.vendor; # char* vendor
 }
-
-constant vorbis_info is export := vorbis_info;
-constant vorbis_dsp_state is export := vorbis_dsp_state;
-constant vorbis_block is export := vorbis_block;
-constant vorbis_comment is export := vorbis_comment;
 
 ## Functions
 
@@ -113,8 +110,8 @@ sub vorbis_comment_init(
 
 #extern void     vorbis_comment_add(vorbis_comment *vc, const char *comment);
 sub vorbis_comment_add(
-	vorbis_comment				$vc # Typedef<vorbis_comment>->|vorbis_comment|*
-	,vorbis_synthesis_trackonly	$comment # const char*
+	vorbis_comment	$vc 		# Typedef<vorbis_comment>->|vorbis_comment|*
+	,Str			$comment 	# const char*
 ) is native(LIB)  is export { * }
 
 
@@ -301,15 +298,15 @@ sub vorbis_synthesis_blockin(
 
 #extern int      vorbis_synthesis_pcmout(vorbis_dsp_state *v,float ***pcm);
 sub vorbis_synthesis_pcmout(
-	vorbis_dsp_state	$v # Typedef<vorbis_dsp_state>->|vorbis_dsp_state|*
-	,Pointer[Pointer[Pointer[num32]]]$pcm # float***
+	vorbis_dsp_state	$v 			# Typedef<vorbis_dsp_state>->|vorbis_dsp_state|*
+	,Pointer 			$pcm is rw 	# float***
 ) is native(LIB) returns int32 is export { * }
 
 
 #extern int      vorbis_synthesis_lapout(vorbis_dsp_state *v,float ***pcm);
 sub vorbis_synthesis_lapout(
-	vorbis_dsp_state					$v # Typedef<vorbis_dsp_state>->|vorbis_dsp_state|*
-	,Pointer[Pointer[Pointer[num32]]]	$pcm # float***
+	vorbis_dsp_state	$v 			# Typedef<vorbis_dsp_state>->|vorbis_dsp_state|*
+	,Pointer			$pcm is rw	# float***
 ) is native(LIB) returns int32 is export { * }
 
 
