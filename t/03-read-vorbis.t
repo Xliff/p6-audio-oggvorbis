@@ -77,24 +77,29 @@ ok
 $i = 0;
 while ($i < 2) {
 	while ($i < 2) {
-		my $result = ogg_sync_pageout($oy, $og);
+		$result = ogg_sync_pageout($oy, $og);
 		last if $result == 0;
 
 		if ($result == 1) {
 			ogg_stream_pagein($os, $og);
-		}
 
-		while ($i < 2) {
-			$result = ogg_stream_packetout($os, $op);
-			last if $result == 0;
+			while ($i < 2) {
+				$result = ogg_stream_packetout($os, $op);
+				last if $result == 0;
+				if ($result < 0) {
+					flunk "received corrupt secondary header from packet";
+					die "Aborting.";
+				}
 
-			if ($result < 1) {
-				flunk "received corrupt secondary header";
-				die "Aborting.";
+				$result = vorbis_synthesis_headerin($vi, $vc, $op);
+				if ($result < 0) {
+					flunk "received corrupt secondary header";
+					die "Aborting.";
+				}
+				
+				$i++;
 			}
 		}
-
-		$i++;
 	}
 
 	$buffer = ogg_sync_buffer($oy, 4096);
