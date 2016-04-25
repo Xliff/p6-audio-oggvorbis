@@ -40,11 +40,6 @@ my $eos = 0;
 my $i;
 my uint16 $convsize = 4096;
 
-# cw: 
-# Buffer. Size of $convsize. Need to implement pointer math in Perl6.
-# This is something that is *not* easy in Perl6 because it is *UNPERL*
-my int16 $convbuffer;
-
 $buffer = ogg_sync_buffer($oy, 4096);
 getNextInputBlock();
 
@@ -111,23 +106,13 @@ while ($i < 2) {
 	}
 }
 
-#
-#
-#    *
-#    * cw: Still need to figure out how to handle this
-#    *
-#
-#    === 
-#    char **ptr=vc.user_comments;
-#    while(*ptr){
-#        fprintf(stderr,"%s\n",*ptr);
-#        ++ptr;
-#    }
-#}
-
-
 ok $vi.defined, "found vorbis_info header. Bitstream count is {$vi.channels}, {$vi.rate}Hz";
 ok $vc.defined, "found vorbis_comment header";
+
+my @uc := nativecast(CArray[Str], $vc.user_comments);
+loop (my $ci = 0; @uc[$ci].defined; $ci++) {
+	diag "Comment: {@uc[$ci]}";
+}
 
 $convsize = (4096 / $vi.channels).floor;
 
