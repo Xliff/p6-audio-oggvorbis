@@ -46,7 +46,7 @@ my $fh = open "resources/SoundMeni.wav", :bin;
 $fh.read(44);
 
 vorbis_info_init($vi);
-$ret = vorbis_encode_init_vbr($vi, 2, 44100, 0.1);
+$ret = vorbis_encode_init_vbr($vi, 2, 44100, 0.1e0);
 
 if ($ret != 0) {
 	flunk "encoder failed to initialize with error code $ret";
@@ -66,22 +66,20 @@ unless ($fhw) {
 vorbis_comment_init($vc);
 vorbis_comment_add_tag($vc, "TEST", "Encoding via Audio::OggVorbis");
 
-vorbis_analysis_init($vd, $vc);
+vorbis_analysis_init($vd, $vi);
 vorbis_block_init($vd, $vb);
 
-ogg_stream_init($os, rand);
+ogg_stream_init($os, (rand * 10e8).Int);
 
 my ogg_packet $header      .= new;
 my ogg_packet $header_comm .= new;
 my ogg_packet $header_code .= new;
 
 # cw: Sanity check
-ok [&&] (
-	$header      ~~ ogg_packet, 
-	$header_comm ~~ ogg_packet, 
-	$header_code ~~ ogg_packet
-), 'headers initialized';
-
+isa-ok $header, ogg_packet, 'first header initialized';
+isa-ok $header, ogg_packet, 'second header initialized';
+isa-ok $header, ogg_packet, 'last header initialized';
+	
 vorbis_analysis_headerout($vd, $vc, $header, $header_comm, $header_code);
 
 # cw: Will be streamlined when implemented in Audio::OggVorbis
@@ -110,21 +108,21 @@ while $eos == 0 {
 		# End of file.
 		vorbis_analysis_wrote($vd, 0);
 	} else {
-		my @buffer;
 		my $prebuff_ptr = vorbis_analysis_buffer($vd, READ);
-		my @pre_buffer := nativecast(CArray[CArray[num32]], $prebuff_ptr);
-		@buffer[$_] := nativecast(CArray[num32], @pre_buffer[$_]) for ^2;
+		my @buffer := nativecast(CArray[CArray[num32]], $prebuff_ptr);
 
 		# Uninterleave.
 		# cw: I'm sure there's a smarter way to do this in P6...
 		loop ($i = 0; $i < $bytes/4; $i++) {
-			@buffer[0][i] = 
-				$readbuff[$i * 4 + 1] +< 8 |
-				((0x00ff & $readbuff[$i * 4].Int) / 32768e0);
+			@buffer[0][$i] = Num(
+				$readbuff[$i * 4 + 1] +< 8 +|
+				((0x00ff +& $readbuff[$i * 4]) / 32768e0)
+			);
 
-			@buffer[1][i] = 
-				$readbuff[$i * 4 + 3] +< 8 |
-				((0x00ff & $readbuff[$i * 4 + 2].Int) / 32768e0);
+			@buffer[1][$i] = Num(
+				$readbuff[$i * 4 + 3] +< 8 +|
+				((0x00ff +& $readbuff[$i * 4 + 2].Int) / 32768e0)
+			);
 		}
 
 		# Update the library.
