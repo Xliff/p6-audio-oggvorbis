@@ -9,6 +9,8 @@ use Audio::OggVorbis::Ogg;
 use Audio::OggVorbis::Vorbis;
 use Audio::OggVorbis::VorbisEnc;
 
+constant READ = 1024;
+
 sub writeToFile(IO::Handle $f, $d, $len) {
 	my @a := nativecast(CArray[uint8], $d); 
 	$f.write(Blob.new(@a[^$len]));
@@ -97,9 +99,64 @@ repeat {
 
 	# cw: Wow. This was missing from the original code.
 	$eos = 1 if ogg_page_eos($og);
-} while ($eos == 0);
+} while $eos == 0;
 
-### MOAR HERE
+while $eos == 0 {
+	my $i;
+	my $readbuff = $fh.read(READ * 4);
+	my $bytes = $readbuff.elems;
+
+	if $bytes == 0 {
+		# End of file.
+		vorbis_analysis_wrote($vd, 0);
+	} else {
+		my @buffer;
+		my $prebuff_ptr = vorbis_analysis_buffer($vd, READ);
+		my @pre_buffer := nativecast(CArray[CArray[num32]], $prebuff_ptr);
+		@buffer[$_] := nativecast(CArray[num32], @pre_buffer[$_]) for ^2;
+
+		# Uninterleave.
+		# cw: I'm sure there's a smarter way to do this in P6...
+		loop ($i = 0; $i < $bytes/4; $i++) {
+			@buffer[0][i] = 
+				$readbuff[$i * 4 + 1] +< 8 |
+				((0x00ff & $readbuff[$i * 4].Int) / 32768e0);
+
+			@buffer[1][i] = 
+				$readbuff[$i * 4 + 3] +< 8 |
+				((0x00ff & $readbuff[$i * 4 + 2].Int) / 32768e0);
+		}
+
+		# Update the library.
+		vorbis_analysis_wrote($vd, $i);
+	}
+
+	while (vorbis_analysis_blockout($vd, $vb) == 1) {
+		# cw: This assumes bitrate analysis. Do we leave it out if we don't
+		#     want it?
+		vorbis_analysis($vb, ogg_packet);
+		vorbis_bitrate_addblock($vb);
+
+		while (vorbis_bitrate_flushpacket($vd, $op) != 0) {
+			ogg_stream_packetin($os, $op);
+
+			# Write out pages.
+			while ($eos == 0) {
+				$ret = ogg_stream_pageout($os, $og);
+				last if $ret == 0;
+
+				writeToFile($fhw, $og.header, $og.header_len);
+				writeToFile($fhw, $og.body, $og.body_len);
+
+				$eos = 1 if ogg_page_eos($og);
+			}
+		}
+	}
+}
+
+# cw: We only know it completed, not if the results are valid. 
+#     Suggestions welcome!
+ok True, 'encoding process completed';
 
 
 # Properly clear structures after use.
@@ -111,6 +168,7 @@ ok $ret == 0, 'vorbis_block cleared';
 
 vorbis_dsp_clear($vd);
 vorbis_comment_clear($vc);
+
 # Must be called LAST.
 vorbis_info_clear($vi);
 

@@ -3,12 +3,13 @@
 # Port of the decoder_example.c program, found here:
 # https://svn.xiph.org/trunk/vorbis/examples/decoder_example.c
 
+use v6.c;
 use Test;
 use lib 'lib';
 
 use NativeCall;
-use Audio::LibOggVorbis::Ogg;
-use Audio::LibOggVorbis::Vorbis;
+use Audio::OggVorbis::Ogg;
+use Audio::OggVorbis::Vorbis;
 
 my ($buffer, $bytes, $fh, $data, $result);
 my $oy = ogg_sync_state.new();
