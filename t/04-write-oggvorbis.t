@@ -27,9 +27,17 @@ my $vc = vorbis_comment.new();
 my $vd = vorbis_dsp_state.new();
 my $vb = vorbis_block.new();
 
+say "ogg_stream_state = {nativesizeof(ogg_stream_state)}";
+say "ogg_page = {nativesizeof(ogg_page)}";
+say "ogg_packet = {nativesizeof(ogg_packet)}";
+say "vorbis_info = {nativesizeof(vorbis_info)}";
+say "vorbis_comment = {nativesizeof(vorbis_comment)}";
+say "vorbis_dsp_state = {nativesizeof(vorbis_dsp_state)}";
+say "vorbis_block = {nativesizeof(vorbis_block)}";
+
 my $eos = 0;
 
-my ($ret, $i, $foundrate);
+my ($ret, $i);
 
 my $fh = open "resources/SoundMeni.wav", :bin;
 
@@ -43,7 +51,19 @@ my $fh = open "resources/SoundMeni.wav", :bin;
 #     header.
 
 # Skip header.
-$fh.read(44);
+#$fh.read(44);
+
+my $founddata = 0;
+loop ($i = 0; $i < 30; $i++) {
+	my $b = $fh.read(2);
+
+	if ($b[0] == 'd'.ord && $b[1] == 'a'.ord) {
+		$founddata =1;
+		$fh.read(6);
+	}
+}
+
+ok $founddata = 1, 'found start of data';
 
 vorbis_info_init($vi);
 $ret = vorbis_encode_init_vbr($vi, 2, 44100, 0.1e0);
@@ -64,12 +84,14 @@ unless ($fhw) {
 
 # Add a comment
 vorbis_comment_init($vc);
-vorbis_comment_add_tag($vc, "TEST", "Encoding via Audio::OggVorbis");
+vorbis_comment_add_tag($vc, "ENCODER", "encoder_example.pl");
 
 vorbis_analysis_init($vd, $vi);
 vorbis_block_init($vd, $vb);
 
-ogg_stream_init($os, (rand * 10e8).Int);
+my $r = (rand * 1e8).Int;
+ogg_stream_init($os, $r);
+say "SN: {$r}";
 
 my ogg_packet $header      .= new;
 my ogg_packet $header_comm .= new;
@@ -90,15 +112,19 @@ ogg_stream_packetin($os, $header_code);
 # Write headers and insure the data begins on a new page.
 repeat {
 	$ret = ogg_stream_flush($os, $og);
-	last if $ret != 0;
+	last if $ret == 0;
 
 	writeToFile($fhw, $og.header, $og.header_len);
 	writeToFile($fhw, $og.body, $og.body_len);
+	#say "H1 - H: {$og.header_len} / B: {$og.body_len}";
 
 	# cw: Wow. This was missing from the original code.
 	$eos = 1 if ogg_page_eos($og);
 } while $eos == 0;
 
+# cw: XXX - Header is now working, but must figure out why 
+#     data isn't.
+my $loop_count = 0;
 while $eos == 0 {
 	my $i;
 	my $readbuff = $fh.read(READ * 4);
@@ -145,16 +171,18 @@ while $eos == 0 {
 
 				writeToFile($fhw, $og.header, $og.header_len);
 				writeToFile($fhw, $og.body, $og.body_len);
+				say "E1 - H: {$og.header_len} / B: {$og.body_len}";
 
 				$eos = 1 if ogg_page_eos($og);
 			}
 		}
 	}
+	$loop_count++;
 }
 
 # cw: We only know it completed, not if the results are valid. 
 #     Suggestions welcome!
-ok True, 'encoding process completed';
+ok True, "encoding process completed in {$loop_count} loops";
 
 
 # Properly clear structures after use.
