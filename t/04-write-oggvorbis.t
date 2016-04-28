@@ -60,6 +60,7 @@ loop ($i = 0; $i < 30; $i++) {
 	if ($b[0] == 'd'.ord && $b[1] == 'a'.ord) {
 		$founddata =1;
 		$fh.read(6);
+		last;
 	}
 }
 
@@ -76,15 +77,17 @@ if ($ret != 0) {
 ok $ret == 0, 'encoder initialized';
 
 # Set up output file.
-my $fhw = open("SoundMenu-test.ogg", :w, :bin);
+my $fhw = open("SoundMeni-test.ogg", :w, :bin);
 unless ($fhw) {
 	flunk "error opening output file.";
 	die "Aborting";
 }
 
 # Add a comment
+#
+# cw: Uses original code comment until valid operation can be verified.
 vorbis_comment_init($vc);
-vorbis_comment_add_tag($vc, "ENCODER", "encoder_example.pl");
+vorbis_comment_add_tag($vc, "ENCODER", "encoder_example.c");
 
 vorbis_analysis_init($vd, $vi);
 vorbis_block_init($vd, $vb);
@@ -110,45 +113,94 @@ ogg_stream_packetin($os, $header_comm);
 ogg_stream_packetin($os, $header_code);
 
 # Write headers and insure the data begins on a new page.
-repeat {
+while ($eos == 0) {
 	$ret = ogg_stream_flush($os, $og);
 	last if $ret == 0;
 
 	writeToFile($fhw, $og.header, $og.header_len);
 	writeToFile($fhw, $og.body, $og.body_len);
-	#say "H1 - H: {$og.header_len} / B: {$og.body_len}";
+	say "H1 - H: {$og.header_len} / B: {$og.body_len}";
 
 	# cw: Wow. This was missing from the original code.
 	$eos = 1 if ogg_page_eos($og);
-} while $eos == 0;
+} 
 
-# cw: XXX - Header is now working, but must figure out why 
-#     data isn't.
+# cw: XXX - Data isn't converting properly. Getting noise in output.
 my $loop_count = 0;
+my $stop = 40;
 while $eos == 0 {
 	my $i;
 	my $readbuff = $fh.read(READ * 4);
 	my $bytes = $readbuff.elems;
+
 
 	if $bytes == 0 {
 		# End of file.
 		vorbis_analysis_wrote($vd, 0);
 	} else {
 		my $prebuff_ptr = vorbis_analysis_buffer($vd, READ);
+
+		# cw: XXX - Maybe needs 2 nativecasts here, like earlier?
 		my @buffer := nativecast(CArray[CArray[num32]], $prebuff_ptr);
 
 		# Uninterleave.
 		# cw: I'm sure there's a smarter way to do this in P6...
 		loop ($i = 0; $i < $bytes/4; $i++) {
+
+			# cw: XXX - Looks like the problem stems from bad values
+			#     in the calculations.
+			
 			@buffer[0][$i] = Num(
 				$readbuff[$i * 4 + 1] +< 8 +|
-				((0x00ff +& $readbuff[$i * 4]) / 32768e0)
+				((0x00ff +& $readbuff[$i * 4].Int) / 32768e0)
 			);
 
 			@buffer[1][$i] = Num(
 				$readbuff[$i * 4 + 3] +< 8 +|
 				((0x00ff +& $readbuff[$i * 4 + 2].Int) / 32768e0)
 			);
+
+			if ($readbuff[$i * 4].Int != 0 && $stop) {
+			  $stop--;
+	          say(
+	          	sprintf(
+		            "Byte %x found at block offset %d", 
+		            $readbuff[$i * 4].Int, 
+		            $i * 4
+	            )
+	          );
+	        }
+		    if ($readbuff[$i * 4 + 1].Int != 0 && $stop) {
+			  $stop--;
+	          say(
+	          	sprintf(
+		            "Byte %x found at block offset %d", 
+		            $readbuff[$i * 4 + 1].Int, 
+		            $i * 4 + 1
+	            )
+	          );
+	        }
+	        if ($readbuff[$i * 4 + 2].Int != 0 && $stop) {
+			  $stop--;
+	          say(
+	          	sprintf(
+		            "Byte %x found at block offset %d", 
+		            $readbuff[$i * 4 + 2].Int, 
+		            $i * 4 + 2
+	            )
+	          );
+	        }
+	        if ($readbuff[$i * 4 + 3].Int != 0 && $stop) {
+			  $stop--;
+	          say(
+	          	sprintf(
+		            "Byte %x found at block offset %d", 
+		            $readbuff[$i * 4 + 3].Int, 
+		            $i * 4 + 3
+	            )
+	          );
+	        }
+
 		}
 
 		# Update the library.
