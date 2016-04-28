@@ -27,14 +27,6 @@ my $vc = vorbis_comment.new();
 my $vd = vorbis_dsp_state.new();
 my $vb = vorbis_block.new();
 
-say "ogg_stream_state = {nativesizeof(ogg_stream_state)}";
-say "ogg_page = {nativesizeof(ogg_page)}";
-say "ogg_packet = {nativesizeof(ogg_packet)}";
-say "vorbis_info = {nativesizeof(vorbis_info)}";
-say "vorbis_comment = {nativesizeof(vorbis_comment)}";
-say "vorbis_dsp_state = {nativesizeof(vorbis_dsp_state)}";
-say "vorbis_block = {nativesizeof(vorbis_block)}";
-
 my $eos = 0;
 
 my ($ret, $i);
@@ -94,7 +86,6 @@ vorbis_block_init($vd, $vb);
 
 my $r = (rand * 1e8).Int;
 ogg_stream_init($os, $r);
-say "SN: {$r}";
 
 my ogg_packet $header      .= new;
 my ogg_packet $header_comm .= new;
@@ -119,7 +110,6 @@ while ($eos == 0) {
 
 	writeToFile($fhw, $og.header, $og.header_len);
 	writeToFile($fhw, $og.body, $og.body_len);
-	say "H1 - H: {$og.header_len} / B: {$og.body_len}";
 
 	# cw: Wow. This was missing from the original code.
 	$eos = 1 if ogg_page_eos($og);
@@ -139,11 +129,7 @@ while $eos == 0 {
 		vorbis_analysis_wrote($vd, 0);
 	} else {
 		my $prebuff_ptr = vorbis_analysis_buffer($vd, READ);
-
-		# cw: XXX - Maybe needs 2 nativecasts here, like earlier?
-		my @pre_buff := nativecast(CArray[CArray[num32]], $prebuff_ptr);
-		my @buffer0 := nativecast(CArray[num32], @pre_buff[0]);
-		my @buffer1 :=  nativecast(CArray[num32], @pre_buff[1]);
+		my @buffer := nativecast(CArray[CArray[num32]], $prebuff_ptr);
 
 		# Uninterleave.
 		# cw: I'm sure there's a smarter way to do this in P6...
@@ -153,79 +139,13 @@ while $eos == 0 {
 			#     in the calculations.
 			my num32 $div = 32768e0;
 			
-			@buffer0[$i] = 
+			@buffer[0][$i] = 
 				(($readbuff[$i * 4 + 1] +< 8) +|
 				(0x00ff +& $readbuff[$i * 4].Int)) / $div;
 
-			@buffer1[$i] = 
+			@buffer[1][$i] = 
 				(($readbuff[$i * 4 + 3] +< 8) +|
 				(0x00ff +& $readbuff[$i * 4 + 2].Int)) / $div;
-
-			if ($readbuff[$i * 4].Int != 0 && $stop) {
-			  $stop--;
-	          say(
-	          	sprintf(
-		            "Byte %x found at block offset %d", 
-		            $readbuff[$i * 4].Int, 
-		            $i * 4
-	            ),
-	          );
-	          say "Buffer0 is {@buffer0[$i]}";
-	          say "Buffer1 is {@buffer1[$i]}";
-	          say "Byte1 is {$readbuff[$i * 4]}";
-	          say "Byte2 is {$readbuff[$i * 4 + 1]}";
-	          say "Byte3 is {$readbuff[$i * 4 + 2]}";
-	          say "Byte4 is {$readbuff[$i * 4 + 3]}";
-	        }
-		    if ($readbuff[$i * 4 + 1].Int != 0 && $stop) {
-			  $stop--;
-	          say(
-	          	sprintf(
-		            "Byte %x found at block offset %d", 
-		            $readbuff[$i * 4 + 1].Int, 
-		            $i * 4 + 1
-	            )
-	          );
-	          say "Buffer0 is {@buffer0[$i]}";
-	          say "Buffer1 is {@buffer1[$i]}";
-	          say "Byte1 is {$readbuff[$i * 4]}";
-	          say "Byte2 is {$readbuff[$i * 4 + 1]}";
-	          say "Byte3 is {$readbuff[$i * 4 + 2]}";
-	          say "Byte4 is {$readbuff[$i * 4 + 3]}";
-	        }
-	        if ($readbuff[$i * 4 + 2].Int != 0 && $stop) {
-			  $stop--;
-	          say(
-	          	sprintf(
-		            "Byte %x found at block offset %d", 
-		            $readbuff[$i * 4 + 2].Int, 
-		            $i * 4 + 2
-	            )
-	          );
-	          say "Buffer0 is {@buffer0[$i]}";
-	          say "Buffer1 is {@buffer1[$i]}";
-	          say "Byte1 is {$readbuff[$i * 4]}";
-	          say "Byte2 is {$readbuff[$i * 4 + 1]}";
-	          say "Byte3 is {$readbuff[$i * 4 + 2]}";
-	          say "Byte4 is {$readbuff[$i * 4 + 3]}";
-	        }
-	        if ($readbuff[$i * 4 + 3].Int != 0 && $stop) {
-			  $stop--;
-	          say(
-	          	sprintf(
-		            "Byte %x found at block offset %d", 
-		            $readbuff[$i * 4 + 3].Int, 
-		            $i * 4 + 3
-	            )
-	          );
-	          say "Buffer0 is {@buffer0[$i]}";
-	          say "Buffer1 is {@buffer1[$i]}";
-	          say "Byte1 is {$readbuff[$i * 4]}";
-	          say "Byte2 is {$readbuff[$i * 4 + 1]}";
-	          say "Byte3 is {$readbuff[$i * 4 + 2]}";
-	          say "Byte4 is {$readbuff[$i * 4 + 3]}";
-	        }
-
 		}
 
 		# Update the library.
@@ -248,7 +168,6 @@ while $eos == 0 {
 
 				writeToFile($fhw, $og.header, $og.header_len);
 				writeToFile($fhw, $og.body, $og.body_len);
-				say "E1 - H: {$og.header_len} / B: {$og.body_len}";
 
 				$eos = 1 if ogg_page_eos($og);
 			}
