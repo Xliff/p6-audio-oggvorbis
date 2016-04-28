@@ -130,7 +130,7 @@ my $loop_count = 0;
 my $stop = 40;
 while $eos == 0 {
 	my $i;
-	my $readbuff = $fh.read(READ * 4);
+	my Blob[int8] $readbuff = Blob[int8].new($fh.read(READ * 4));
 	my $bytes = $readbuff.elems;
 
 
@@ -141,7 +141,9 @@ while $eos == 0 {
 		my $prebuff_ptr = vorbis_analysis_buffer($vd, READ);
 
 		# cw: XXX - Maybe needs 2 nativecasts here, like earlier?
-		my @buffer := nativecast(CArray[CArray[num32]], $prebuff_ptr);
+		my @pre_buff := nativecast(CArray[CArray[num32]], $prebuff_ptr);
+		my @buffer0 := nativecast(CArray[num32], @pre_buff[0]);
+		my @buffer1 :=  nativecast(CArray[num32], @pre_buff[1]);
 
 		# Uninterleave.
 		# cw: I'm sure there's a smarter way to do this in P6...
@@ -149,16 +151,15 @@ while $eos == 0 {
 
 			# cw: XXX - Looks like the problem stems from bad values
 			#     in the calculations.
+			my num32 $div = 32768e0;
 			
-			@buffer[0][$i] = Num(
-				$readbuff[$i * 4 + 1] +< 8 +|
-				((0x00ff +& $readbuff[$i * 4].Int) / 32768e0)
-			);
+			@buffer0[$i] = 
+				(($readbuff[$i * 4 + 1] +< 8) +|
+				(0x00ff +& $readbuff[$i * 4].Int)) / $div;
 
-			@buffer[1][$i] = Num(
-				$readbuff[$i * 4 + 3] +< 8 +|
-				((0x00ff +& $readbuff[$i * 4 + 2].Int) / 32768e0)
-			);
+			@buffer1[$i] = 
+				(($readbuff[$i * 4 + 3] +< 8) +|
+				(0x00ff +& $readbuff[$i * 4 + 2].Int)) / $div;
 
 			if ($readbuff[$i * 4].Int != 0 && $stop) {
 			  $stop--;
@@ -167,8 +168,14 @@ while $eos == 0 {
 		            "Byte %x found at block offset %d", 
 		            $readbuff[$i * 4].Int, 
 		            $i * 4
-	            )
+	            ),
 	          );
+	          say "Buffer0 is {@buffer0[$i]}";
+	          say "Buffer1 is {@buffer1[$i]}";
+	          say "Byte1 is {$readbuff[$i * 4]}";
+	          say "Byte2 is {$readbuff[$i * 4 + 1]}";
+	          say "Byte3 is {$readbuff[$i * 4 + 2]}";
+	          say "Byte4 is {$readbuff[$i * 4 + 3]}";
 	        }
 		    if ($readbuff[$i * 4 + 1].Int != 0 && $stop) {
 			  $stop--;
@@ -179,6 +186,12 @@ while $eos == 0 {
 		            $i * 4 + 1
 	            )
 	          );
+	          say "Buffer0 is {@buffer0[$i]}";
+	          say "Buffer1 is {@buffer1[$i]}";
+	          say "Byte1 is {$readbuff[$i * 4]}";
+	          say "Byte2 is {$readbuff[$i * 4 + 1]}";
+	          say "Byte3 is {$readbuff[$i * 4 + 2]}";
+	          say "Byte4 is {$readbuff[$i * 4 + 3]}";
 	        }
 	        if ($readbuff[$i * 4 + 2].Int != 0 && $stop) {
 			  $stop--;
@@ -189,6 +202,12 @@ while $eos == 0 {
 		            $i * 4 + 2
 	            )
 	          );
+	          say "Buffer0 is {@buffer0[$i]}";
+	          say "Buffer1 is {@buffer1[$i]}";
+	          say "Byte1 is {$readbuff[$i * 4]}";
+	          say "Byte2 is {$readbuff[$i * 4 + 1]}";
+	          say "Byte3 is {$readbuff[$i * 4 + 2]}";
+	          say "Byte4 is {$readbuff[$i * 4 + 3]}";
 	        }
 	        if ($readbuff[$i * 4 + 3].Int != 0 && $stop) {
 			  $stop--;
@@ -199,6 +218,12 @@ while $eos == 0 {
 		            $i * 4 + 3
 	            )
 	          );
+	          say "Buffer0 is {@buffer0[$i]}";
+	          say "Buffer1 is {@buffer1[$i]}";
+	          say "Byte1 is {$readbuff[$i * 4]}";
+	          say "Byte2 is {$readbuff[$i * 4 + 1]}";
+	          say "Byte3 is {$readbuff[$i * 4 + 2]}";
+	          say "Byte4 is {$readbuff[$i * 4 + 3]}";
 	        }
 
 		}
