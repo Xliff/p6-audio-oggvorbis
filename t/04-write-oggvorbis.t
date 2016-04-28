@@ -75,11 +75,9 @@ unless ($fhw) {
 	die "Aborting";
 }
 
-# Add a comment
-#
 # cw: Uses original code comment until valid operation can be verified.
 vorbis_comment_init($vc);
-vorbis_comment_add_tag($vc, "ENCODER", "encoder_example.c");
+vorbis_comment_add_tag($vc, "TEST", "Audio::OggVorbis encoder");
 
 vorbis_analysis_init($vd, $vi);
 vorbis_block_init($vd, $vb);
@@ -111,15 +109,15 @@ while ($eos == 0) {
 	writeToFile($fhw, $og.header, $og.header_len);
 	writeToFile($fhw, $og.body, $og.body_len);
 
-	# cw: Wow. This was missing from the original code.
 	$eos = 1 if ogg_page_eos($og);
 } 
 
-# cw: XXX - Data isn't converting properly. Getting noise in output.
 my $loop_count = 0;
 my $stop = 40;
 while $eos == 0 {
 	my $i;
+	# cw: libvorbis expects *signed* data, otherwise the
+	#     output is corrupted.
 	my Blob[int8] $readbuff = Blob[int8].new($fh.read(READ * 4));
 	my $bytes = $readbuff.elems;
 
@@ -134,9 +132,6 @@ while $eos == 0 {
 		# Uninterleave.
 		# cw: I'm sure there's a smarter way to do this in P6...
 		loop ($i = 0; $i < $bytes/4; $i++) {
-
-			# cw: XXX - Looks like the problem stems from bad values
-			#     in the calculations.
 			my num32 $div = 32768e0;
 			
 			@buffer[0][$i] = 
@@ -184,7 +179,7 @@ ok True, "encoding process completed in {$loop_count} loops";
 # Properly clear structures after use.
 ogg_stream_clear($os);
 
-# cw: This is the only testable routine!
+# cw: This is the only testable routine in the cleanup phase.
 $ret = vorbis_block_clear($vb);
 ok $ret == 0, 'vorbis_block cleared';
 
