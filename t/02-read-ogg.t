@@ -6,7 +6,7 @@ use Test;
 use lib 'lib';
 
 use NativeCall;
-use Audio::LibOggVorbis::Ogg;
+use Audio::OggVorbis::Ogg;
 
 plan 15;
 
@@ -29,7 +29,7 @@ ok $ret != 1, 'can call ogg_sync_pageout';
 $b = ogg_sync_buffer($s, 4096);
 isa-ok $b, CArray, 'can allocate buffer with ogg_sync_buffer';
 
-$fh = open "resources/SoundMeni.ogg", :bin;
+$fh = open "test_data/SoundMeni.ogg", :bin;
 my $data = $fh.read(4096);
 for $data.subbuf(0).kv -> $i, $c { 
 	$b[$i] = $c;

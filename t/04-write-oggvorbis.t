@@ -31,7 +31,7 @@ my $eos = 0;
 
 my ($ret, $i);
 
-my $fh = open "resources/SoundMeni.wav", :bin;
+my $fh = open "test_data/SoundMeni.wav", :bin;
 
 # cw: An ammusing comment from the source, that applies here:
 # 		"we cheat on the WAV header; we just bypass 44 bytes (simplest WAV
@@ -69,7 +69,7 @@ if ($ret != 0) {
 ok $ret == 0, 'encoder initialized';
 
 # Set up output file.
-my $fhw = open("SoundMeni-test.ogg", :w, :bin);
+my $fhw = open("test_data/SoundMeni-test.ogg", :w, :bin);
 unless ($fhw) {
 	flunk "error opening output file.";
 	die "Aborting";

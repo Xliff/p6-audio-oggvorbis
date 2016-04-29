@@ -4,6 +4,7 @@
 # https://svn.xiph.org/trunk/vorbis/examples/decoder_example.c
 
 use v6.c;
+
 use Test;
 use lib 'lib';
 
@@ -35,7 +36,7 @@ isa-ok $vc, vorbis_comment, "successfully created vorbis_comment instance";
 isa-ok $vd, vorbis_dsp_state, "successfully created vorbis_dsp_state instance";
 isa-ok $vb, vorbis_block, "successfully created vorbis_block instance";
 
-$fh = open "resources/SoundMeni.ogg", :bin;
+$fh = open "test_data/SoundMeni.ogg", :bin;
 
 my $eos = 0;
 my $i;
@@ -111,9 +112,9 @@ ok $vi.defined, "found vorbis_info header. Bitstream count is {$vi.channels}, {$
 ok $vc.defined, "found vorbis_comment header";
 
 my @uc := nativecast(CArray[Str], $vc.user_comments);
-loop (my $ci = 0; @uc[$ci].defined; $ci++) {
-	diag "Comment: {@uc[$ci]}";
-}
+#loop (my $ci = 0; @uc[$ci].defined; $ci++) {
+#	diag "Comment: {@uc[$ci]}";
+#}
 
 $convsize = (4096 / $vi.channels).floor;
 

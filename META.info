@@ -1,16 +1,15 @@
 {
-    "name" : "Audio::LibOggVorbis",
-    "version" : "0.1",
+    "name" : "Audio::OggVorbis",
+    "version" : "0.0.1",
     "authors" : [ "github:Xliff", "Clifton Wood" ],
     "description" : "Perl6 bindings for libogg, libvorbis and libvorbisenc",
     "depends" : [ ],
     "build-depends" : [ ],
     "provides" : {
-        #"Audio::LibOggVorbis" : "lib/Audio/LibOggVorbis,pm",
-        "Audio::LibOggVorbis::Ogg" : "lib/Audio/LibOggVorbis/Ogg.pm",
-        "Audio::LibOggVorbis::Vorbis" : "lib/Audio/LibOggVorbis/Vorbis.pm",
-        #"Audio::LibOggVorbis::VorbisEnc" : "lib/Audio/LibOggVorbis/VorbisEnc.pm",
+        #"Audio::OggVorbis" : "lib/Audio/OggVorbis,pm",
+        "Audio::OggVorbis::Ogg" : "lib/Audio/OggVorbis/Ogg.pm",
+        "Audio::OggVorbis::Vorbis" : "lib/Audio/OggVorbis/Vorbis.pm",
+        "Audio::OggVorbis::VorbisEnc" : "lib/Audio/OggVorbis/VorbisEnc.pm",
     },
-    "resources" : [ "SoundMeni.ogg" ],
     "source-url" : "git://github.com/Xliff/p6-audio-liboggvorbis.git"
 }
