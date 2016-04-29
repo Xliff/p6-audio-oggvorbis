@@ -11,5 +11,6 @@
         "Audio::OggVorbis::Vorbis" : "lib/Audio/OggVorbis/Vorbis.pm",
         "Audio::OggVorbis::VorbisEnc" : "lib/Audio/OggVorbis/VorbisEnc.pm",
     },
-    "source-url" : "git://github.com/Xliff/p6-audio-liboggvorbis.git"
+    "source-url" : "git://github.com/Xliff/p6-audio-oggvorbis.git"
+
 }
