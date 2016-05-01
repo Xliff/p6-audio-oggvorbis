@@ -132,14 +132,118 @@ multi method !actual_decode($id) {
 		#}
 
 		$convsize = (4096 / $vi.channels).floor;
+		my @outblocks;
+		push @outblocks, Buf[int16].new(0 xx BLOCK_SIZE)
+			for ^$vi.channels;
 
 		# Start central decode.
 		if (vorbis_synthesis_init($vd, $vi) == 0) {
-			#...
+			vorbis_block_init($vd, $vb);
+
+			# Straight decode loop until end of stream 
+			while ($eos != 0) {
+		        while ($eos != 0) {
+					$result = ogg_sync_pageout($oy, $og);
+
+					# check if more data needed.
+					last if $result == 0;
+
+					die "Corrupt or missing data in bitstream" 
+						if $result < 0;
+						
+					ogg_stream_pagein($os, $og);
+		            loop {
+						$result = ogg_stream_packetout($os, $op);
+		              
+		              	# check if more data needed.
+		              	last if $result == 0;
+
+						# check for unexpected error.
+		              	die "Corrupt or missing data in bitstream."
+							if $result < 0;
+
+		                # We have a packet.  Decode it.
+		                my Pointer $pcm;
+		                my $samples;
+
+		                if (vorbis_synthesis($vb, $op) == 0) {
+							vorbis_synthesis_blockin($vd, $vb);
+		                }
+
+		                $pcm .= new;
+		                $samples = vorbis_synthesis_pcmout($vd, $pcm);
+		                while ($samples > 0) {
+		            		my ($j, $clipflag, $bout);
+							$clipflag = 0;
+							$bout = $samples < $convsize ?? $samples !! $convsize;
+
+							my @channels := nativecast(CArray[CArray[num32]], $pcm);
+							loop ($i = 0; $i < $vi.channels; $i++) {
+								loop (my $j = 0; $j < $bout; $j++) {
+									my ($val) = @channels[$i][$j] * 32767.5;
+
+									if ($val > 32767) {
+										$val = 32767;
+										$clipflag = 1;
+									} elsif ($val < -32768) {
+								        $val = -32768;
+								        $clipflag = 1;
+								  	}
+
+								  	@outblocks[$i][$j] = $val;
+								}
+							}
+		                  
+		                  	# cw: -YYY- May want to *not* emit this unless the 
+		                  	#     user specifically asks for it.
+							warn sprintf("Clipping in frame %ld", $vd.sequence)
+								if $clipflag == 1;                  
+		                  
+		                  	# cw: -XXX- 
+		                  	# Emit @outblocks either to disk or store to memory
+		                  	#fwrite(convbuffer, 2 * vi.channels, bout, stdout);
+		                  
+		                  	vorbis_synthesis_read($vd, $bout);
+	                  	}            
+            		}
+
+				    $eos = 1 if ogg_page_eos($og) != 0;
+				}
+
+				if ($eos == 0) {
+					getNextInputBlock();
+					$eos = 1 if $bytes == 0;
+		      	}
+			}
+
+	      	# cw: This is worth keeping in mind -- 
+		  	# 
+			# * ogg_page and ogg_packet structs always point to storage in
+		    # * libvorbis.  They're never freed or manipulated directly
+			vorbis_block_clear($vb);
+			vorbis_dsp_clear($vd);
 		}
+
+		ogg_stream_clear($os);
+		vorbis_comment_clear($vc);
+		vorbis_info_clear($vi);			# must be called last
+
 	}
+	ogg_sync_clear($oy);
 
 	# cw: At the very least, let's return a hash. 
+	my %return_val = {
+		channels		=> $vi.channels,
+		bitrate			=> $vi.bitrate,
+		comments 		=> @uc,
+		vendor			=> $vc.vendor,
+	}
+
+	if $!input_data ~~ Blob {
+		# cw: -XXX- Add binary data to return value.
+	} else {
+		# cw: -XXX- Add output file size. 
+	}
 }
 
 # cw: Decode file on disk.
