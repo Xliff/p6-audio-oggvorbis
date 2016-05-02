@@ -7,7 +7,7 @@ before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y libogg-dev libvorbis-dev
 install:
-  - rakudobrew build-panda ${TRAVIS_PERL6_VERSION#latest}
+  - rakudobrew build-panda
   - panda installdeps .
   - panda install JSON::Fast
   - panda install Test::META
