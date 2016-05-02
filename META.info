@@ -6,7 +6,6 @@
     "depends" : [ ],
     "build-depends" : [ ],
     "provides" : {
-        #"Audio::OggVorbis" : "lib/Audio/OggVorbis,pm",
         "Audio::OggVorbis::Ogg" : "lib/Audio/OggVorbis/Ogg.pm",
         "Audio::OggVorbis::Vorbis" : "lib/Audio/OggVorbis/Vorbis.pm",
         "Audio::OggVorbis::VorbisEnc" : "lib/Audio/OggVorbis/VorbisEnc.pm",
