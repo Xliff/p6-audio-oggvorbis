@@ -10,15 +10,15 @@ use Autio::OggVorbis::VorbisEnc;
 
 # Used by both encode() and decode()
 has  		$!input_data;
+has 		$!output_data;
 has	uint64	$!input_offset;
 has uint64	$!bytes_io;
 has 		$!ogg_buffer;
 
 constant BLOCK_SIZE = 4096;
 
-method getNextInputBlock($id) {
+method readInputBlock {
 	my $block;
-	my $bytes;
 
 	# cw: I'm sure there's a slightly better way to do this.
 	given $id {
@@ -48,8 +48,36 @@ method getNextInputBlock($id) {
 	$!ogg_bufer[$_] = $block[$_] for ^$bytes_io;
 }
 
-multi method !actual_decode($id) {
+method writeOutputBlock($block) {
+	# cw: -XXX-
+	#     Getting there. But need to handle 
+	#	  MULTIPLE channels.
+
+	# Proper Interleave!
+	# <psch> m:  my $lol = [(1, 2, 3), (4, 5, 6), (7, 8, 9)]; say [Z](|$lol).flat
+
+	given $output_data {
+		when IO::Handle {
+			$!output_data.write($block);
+		}
+
+		when Buf {
+			# cw: Could use ~=, but don't want new object.
+			$!output_data.push($block);
+		}
+
+		when Nil {
+			# Need to create $!output_data as Buf
+			$!output_data = Buf[int16].new($block);
+		}
+	}
+
+}
+
+multi method !actual_decode($id, $od) {
 	$!input_data = $id;
+	$!output_data = $od;
+	$!input_offset = 0;
 
 	# cw:
 	# In the case of large files, we really 
@@ -71,7 +99,7 @@ multi method !actual_decode($id) {
 	$eos = 0;
 	loop {
 		$buffer = ogg_sync_buffer($oy, BLOCK_SIZE);
-		getNextInputBlock();
+		readInputBlock();
 
 		if (ogg_sync_pageout($oy, $og) != 1) {
 			last if $!bytes_io < BLOCK_SIZE;
@@ -115,7 +143,7 @@ multi method !actual_decode($id) {
 			}
 
 			$!ogg_buffer = ogg_sync_buffer($oy, 4096);
-			getNextInputBlock();
+			readInputBlock();
 
 			die "Unexpected end of file while reading vorbis headers.";
 				if $!bytes_io == 0 && $i < 2;
@@ -202,6 +230,11 @@ multi method !actual_decode($id) {
 		                  	# cw: -XXX- 
 		                  	# Emit @outblocks either to disk or store to memory
 		                  	#fwrite(convbuffer, 2 * vi.channels, bout, stdout);
+		                  	#
+		                  	# Keep channels separate, interleve or both? 
+		                  	# Probably should be an option, which means
+		                  	# the write routine will need to be more complex.
+		                  	writeOutputBlock();
 		                  
 		                  	vorbis_synthesis_read($vd, $bout);
 	                  	}            
@@ -211,7 +244,7 @@ multi method !actual_decode($id) {
 				}
 
 				if ($eos == 0) {
-					getNextInputBlock();
+					readInputBlock();
 					$eos = 1 if $bytes == 0;
 		      	}
 			}
@@ -247,11 +280,8 @@ multi method !actual_decode($id) {
 }
 
 # cw: Decode file on disk.
-multi method decode(IO::Handle $fh) {
-	$!input_data = $fh;
-	$!input_offset = 0;
-
-	.actual_decode($fhandle)
+multi method decode(IO::Handle $fr, IO:Hanlde $fw) {
+	.actual_decode($fr, $fw);
 }
 
 # cw: Decode file on disk.
@@ -259,12 +289,18 @@ multi method decode(Str $fn) {
 	# check for existence or throw exception
 	die "File $fn not found" unless $fn.IO.e;
 
-	my $fh = open($fn, :r, :bin);
-	.decode: $fn;
+	# Not a WAV because there won't be a header.
+	my $fno = $fn ~~ s/ '.' .+ $/.raw/;
+
+	my $fhi = $fn.IO.open :r, :bin;
+	my $fho = open($fno, :w, :bin);
+	die "Can't open output file!" unless $fho;
+
+	.decode: $fhi, $fho;
 }
 
 # cw: Decode data in memory. Returns Blob.
 multi method decode(Blob $b) {
-	.actual_decode($b);
+	.actual_decode($b, Nil);
 }
 

@@ -183,6 +183,7 @@ if (vorbis_synthesis_init($vd, $vi) == 0) {
 						  	}
 
 						  	# cw: -XXX- Place value of val into output buffer, here.
+						  	
 						}
 					}
                   
