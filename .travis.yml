@@ -3,3 +3,10 @@ perl6:
   - latest
   - 2016.04
   - 2016.01
+before_install:
+  -- sudo apt-get -qq update
+  -- sudo apt-get install -y libogg libvorbis
+install:
+    - rakudobrew build-panda ${TRAVIS_PERL6_VERSION#latest}
+    - panda installdeps .
+    - panda install Test::META
