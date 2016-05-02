@@ -4,6 +4,7 @@ use NativeCall;
 use Audio::OggVorbis::Vorbis;
 
 constant LIB = 'vorbisenc';
+constant VER = v2;
 
 # == /usr/include/vorbis/vorbisenc.h ==
 
@@ -38,7 +39,7 @@ sub vorbis_encode_init(
 	,long                   $max_bitrate 		# long int
 	,long                   $nominal_bitrate 	# long int
 	,long                   $min_bitrate 		# long int
-) is native(LIB) returns int32 is export { * }
+) is native(LIB,VER) returns int32 is export { * }
 
 
 sub vorbis_encode_setup_managed(
@@ -48,14 +49,14 @@ sub vorbis_encode_setup_managed(
 	,long                   $max_bitrate 		# long int
 	,long                   $nominal_bitrate 	# long int
 	,long                   $min_bitrate 		# long int
-) is native(LIB) returns int32 is export { * }
+) is native(LIB,VER) returns int32 is export { * }
 
 sub vorbis_encode_setup_vbr(
 	vorbis_info             $vi 			# Typedef<vorbis_info>->|vorbis_info|*
 	,long                   $channels 		# long int
 	,long                   $rate 			# long int
 	,num32                  $quality 		# float
-) is native(LIB) returns int32 is export { * }
+) is native(LIB,VER) returns int32 is export { * }
 
 
 sub vorbis_encode_init_vbr(
@@ -63,13 +64,13 @@ sub vorbis_encode_init_vbr(
 	,long                   $channels 		# long int
 	,long                   $rate 			# long int
 	,num32                  $base_quality 	# float
-) is native(LIB) returns int32 is export { * }
+) is native(LIB,VER) returns int32 is export { * }
 
 
 #extern int vorbis_encode_setup_init(vorbis_info *vi);
 sub vorbis_encode_setup_init(
 	vorbis_info 			$vi 		# Typedef<vorbis_info>->|vorbis_info|*
-) is native(LIB) returns int32 is export { * }
+) is native(LIB,VER) returns int32 is export { * }
 
 
 #extern int vorbis_encode_ctl(vorbis_info *vi,int number,void *arg);
@@ -77,5 +78,5 @@ sub vorbis_encode_ctl(
 	vorbis_info             $vi 		# Typedef<vorbis_info>->|vorbis_info|*
 	,int32                  $number 	# int
 	,Pointer                $arg 		# void*
-) is native(LIB) returns int32 is export { * }
+) is native(LIB,VER) returns int32 is export { * }
 
