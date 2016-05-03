@@ -304,3 +304,7 @@ multi method decode(Blob $b) {
 	.actual_decode($b, Nil);
 }
 
+
+# cw: Do we -really- need instance variables of this class, or can these be static routines?
+# cw: ALSO...current interface to decode() is incomplete. We need to handle options.
+#     and said options should have reasonable defaults!
