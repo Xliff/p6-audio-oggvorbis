@@ -17,6 +17,16 @@ has 		$!ogg_buffer;
 
 constant BLOCK_SIZE = 4096;
 
+# cw: -XXX-
+#
+# Think about class interface. If there will not be instances of this 
+# class, 
+#
+# How is the interface supposed to look?
+# What options will there be (decode first, encode last)
+# What form will the output be in (decode first, encode last)
+
+
 method readInputBlock {
 	my $block;
 
