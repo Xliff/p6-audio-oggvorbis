@@ -1,7 +1,7 @@
 {
     "name" : "Audio::OggVorbis",
     "perl" : "6.c",
-    "version" : "0.0.1",
+    "version" : "0.0.2",
     "authors" : [ "github:Xliff", "Clifton Wood" ],
     "description" : "Perl6 bindings for libogg, libvorbis and libvorbisenc",
     "depends" : [ ],

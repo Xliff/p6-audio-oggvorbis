@@ -120,9 +120,9 @@ $convsize = (4096 / $vi.channels).floor;
 
 # Start central decode.
 if (vorbis_synthesis_init($vd, $vi) == 0) { 
-	vorbis_block_init($vd, $vb);          
+	vorbis_block_init($vd, $vb);
       
-	# Straight decode loop until end of stream */
+	# Straight decode loop until end of stream 
 	while ($eos != 0) {
         while ($eos != 0) {
 			$result = ogg_sync_pageout($oy, $og);
@@ -182,7 +182,8 @@ if (vorbis_synthesis_init($vd, $vi) == 0) {
 						        $clipflag = 1;
 						  	}
 
-						  	# cw: Place value of val into output buffer, here.
+						  	# cw: -XXX- Place value of val into output buffer, here.
+						  	
 						}
 					}
                   

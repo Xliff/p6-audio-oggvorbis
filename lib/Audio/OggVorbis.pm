@@ -26,7 +26,6 @@ constant BLOCK_SIZE = 4096;
 # What options will there be (decode first, encode last)
 # What form will the output be in (decode first, encode last)
 
-
 method readInputBlock {
 	my $block;
 
