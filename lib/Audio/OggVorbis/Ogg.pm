@@ -70,7 +70,7 @@ class ogg_stream_state_header is repr('CStruct') {
         has uint64  $.header34;
         has uint8	$.header35;
 
-        method as_blob {
+        method as_blob2 {
         	my @uint64_list = (
         		$.header00,
 				$.header01,
@@ -126,7 +126,7 @@ class ogg_stream_state_header is repr('CStruct') {
         }
 
         # sortiz++
-        method as_blob2 {
+        method as_blob {
         	return Blob[uint8].new(
         		nativecast(CArray[uint8], self)[
         			^nativesizeof(ogg_stream_state_header)
