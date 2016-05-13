@@ -14,7 +14,6 @@ has 		$!output_data;
 has	uint64	$!input_offset;
 has uint64	$!bytes_io;
 has 		$!ogg_buffer;
-has 		@!extra_handles;
 has 		$!output_type;
 
 constant BLOCK_SIZE = 4096;
@@ -27,6 +26,7 @@ constant BLOCK_SIZE = 4096;
 # How is the interface supposed to look?
 # What options will there be (decode first, encode last)
 # What form will the output be in (decode first, encode last)
+# Add WAV header output.
 
 method readInputBlock {
 	my $block;
@@ -59,7 +59,7 @@ method readInputBlock {
 	$!ogg_bufer[$_] = $block[$_] for ^$bytes_io;
 }
 
-method writeOutputBlock(@channels) {
+method writeOutputBlocks(@output_blocks) {
 	# cw: 
 	# Proper Interleave! Thanks, psch!
 	# <psch> m:  my $lol = [(1, 2, 3), (4, 5, 6), (7, 8, 9)]; say [Z](|$lol).flat
@@ -74,7 +74,7 @@ method writeOutputBlock(@channels) {
 	#     However, it is best avoid naked literals.
 	if $output_type eq 'raw' {
 		my $num =  @$!output_data.elems;
-		my $diff = @channel.elems - $num;
+		my $diff = @output_blocks.elems - $num;
 		if $diff > 0 {
 			# cw: -YYY-
 			#     Code here should only ever run ONCE. Do we need to make an explicit
@@ -103,13 +103,13 @@ method writeOutputBlock(@channels) {
 		}
 	}
 
-	# If output type is WAV then we use @interleve_block;
 	given $!output_type {
 
 		when 'wav' {
+			# If output type is WAV then we use @interleve_block;
 			# cw: -XXX- check to see if [Z] works with CArray
-			my @interleve_block = [Z](|@channels).flat;
-			my $newbuf = Buf[int16].new(@interleve_block)
+			my @interleve_blocks = [Z](|@output_blocks).flat;
+			my $newbuf = Buf[int16].new(@interleve_blocks)
 			given $!output_data[0] {
 				when IO::Handle {
 					$!output_data[0].write($newbuf);
@@ -122,16 +122,16 @@ method writeOutputBlock(@channels) {
 		}
 		
 		when 'raw' {
-			# cw: Handle non WAV-type output.
-			for @$!output_data -> $od {
-				my $block = Buf[int16].new($od);
-				given $od {
+			for @output_blocks:kv -> $c, $b {
+				my $block = Buf[int16].new(@$b);
+				given $!output_data[$c] {
 					when IO::Handle {
 						$od.write($block);
 					}
 
 					when Buf {
-						# cw: Could use ~=, but don't want new object.
+						# cw: infix<~=> would work, but would create EXTRA object
+						#     so .push is more
 						$od.push($block);
 					}
 				}
@@ -271,7 +271,7 @@ multi method !actual_decode($id, $od, *%opts) {
 		              	die "Corrupt or missing data in bitstream."
 							if $result < 0;
 
-		                # We have a packet.  Decode it.
+		                # We have a packet. Decode it.
 		                my Pointer $pcm;
 		                my $samples;
 
@@ -315,7 +315,7 @@ multi method !actual_decode($id, $od, *%opts) {
 		                  	# Keep channels separate, interleve or both? 
 		                  	# Probably should be an option, which means
 		                  	# the write routine will need to be more complex.
-		                  	writeOutputBlock(@channels);
+		                  	writeOutputBlocks(@outblocks);
 		                  
 		                  	vorbis_synthesis_read($vd, $bout);
 	                  	}            
@@ -351,11 +351,11 @@ multi method !actual_decode($id, $od, *%opts) {
 		bitrate			=> $vi.bitrate,
 		comments 		=> @uc,
 		vendor			=> $vc.vendor,
-		size			=> $.bytes_io
+		size			=> $!bytes_io
 	}
 
 	if $!input_data ~~ Blob {
-		%return_val{output_streams} = $.output_data;
+		%return_val{output_streams} = $!output_data;
 	}
 
 	return %return_val;
