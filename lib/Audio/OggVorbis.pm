@@ -94,9 +94,7 @@ method writeOutputBlock(@channels) {
 
 						my $fh = $fh.IO.open(:w, :bin)
 							or
-						die qq:to"ERR";
-						Could not open '{$fh}' for writing due to unexpected error.
-						ERR
+						die "Could not open '{$fh}' for writing due to unexpected error.";
 
 						@$!output_data.push($fh); 
 					}
@@ -106,31 +104,54 @@ method writeOutputBlock(@channels) {
 	}
 
 	# If output type is WAV then we use @interleve_block;
-	my @interleve_block;
-	if $!output_type eq 'wav' {
-		@interleve_block = [Z](|@channels).flat;
-	}
+	given $!output_type {
 
-	# cw: -XXX- Then this entire block needs to be rethought.
-	for @$!output_data -> $od {
-		given $od {
-			when IO::Handle {
-				$od.write($block);
-			}
+		when 'wav' {
+			# cw: -XXX- check to see if [Z] works with CArray
+			my @interleve_block = [Z](|@channels).flat;
+			my $newbuf = Buf[int16].new(@interleve_block)
+			given $!output_data[0] {
+				when IO::Handle {
+					$!output_data[0].write($newbuf);
+				}
 
-			when Buf {
-				# cw: Could use ~=, but don't want new object.
-				$od.push($block);
+				when Buf {
+					$od.push(Buf[int16].new($newbuf);
+				}
 			}
 		}
-	}
+		
+		when 'raw' {
+			# cw: Handle non WAV-type output.
+			for @$!output_data -> $od {
+				my $block = Buf[int16].new($od);
+				given $od {
+					when IO::Handle {
+						$od.write($block);
+					}
 
+					when Buf {
+						# cw: Could use ~=, but don't want new object.
+						$od.push($block);
+					}
+				}
+			}
+		}
+
+	}
 }
 
 multi method !actual_decode($id, $od, *%opts) {
 	$!input_data = $id;
 	$!input_offset = 0;
 	$!output_type = (%opts<output>:v || 'raw').lc;
+
+	# cw: Check output option. If not 'wav' or 'raw' then throw exception.
+	if $!output_type ne 'wav' && $!output_type ne 'raw') {
+		# cw: -YYY- Throw proper exception! 
+		# InvalidOption
+		die "Invalid output type option '{$!output_type}'";
+	}
 
 	# cw: Will always be an array ref, although will contain single output 
 	#     in the case that OUTPUT option is 'WAV'
@@ -334,7 +355,7 @@ multi method !actual_decode($id, $od, *%opts) {
 	}
 
 	if $!input_data ~~ Blob {
-		%return_val{buffers} = $.output_data;
+		%return_val{output_streams} = $.output_data;
 	}
 
 	return %return_val;
