@@ -14,6 +14,8 @@ has 		$!output_data;
 has	uint64	$!input_offset;
 has uint64	$!bytes_io;
 has 		$!ogg_buffer;
+has 		@!extra_handles;
+has 		$!output_type;
 
 constant BLOCK_SIZE = 4096;
 
@@ -57,36 +59,85 @@ method readInputBlock {
 	$!ogg_bufer[$_] = $block[$_] for ^$bytes_io;
 }
 
-method writeOutputBlock($block) {
-	# cw: -XXX-
-	#     Getting there. But need to handle 
-	#	  MULTIPLE channels.
-
-	# Proper Interleave!
+method writeOutputBlock(@channels) {
+	# cw: 
+	# Proper Interleave! Thanks, psch!
 	# <psch> m:  my $lol = [(1, 2, 3), (4, 5, 6), (7, 8, 9)]; say [Z](|$lol).flat
 
-	given $output_data {
-		when IO::Handle {
-			$!output_data.write($block);
-		}
+	# cw: $!output_data is an array of <output> objects.
+	# 		The only time the number of objects in $!output_data is singular
+	#		is if we are writing WAV output. Otherwise contents will be 
+	#		an array of IO::Handles or Buf objects.
+	
+	# Check for proper initialization of $!output_data.
+	# cw: @$!output_data should have AT MOST 1 element in it, by this time. 
+	#     However, it is best avoid naked literals.
+	if $output_type eq 'raw' {
+		my $num =  @$!output_data.elems;
+		my $diff = @channel.elems - $num;
+		if $diff > 0 {
+			# cw: -YYY-
+			#     Code here should only ever run ONCE. Do we need to make an explicit
+			#     check for this??
+			given $!output_data[0] {
+				when Buf {
+					# cw: Create Buf objects
+					@$!output_data.push(Buf[int16].new) for ^$diff;
+				}
 
-		when Buf {
-			# cw: Could use ~=, but don't want new object.
-			$!output_data.push($block);
-		}
+				when IO::Handle {
+					# Open and add IO::Handle objects
+					$base = S/'.' \d+$//;
 
-		when Nil {
-			# Need to create $!output_data as Buf
-			$!output_data = Buf[int16].new($block);
+					for (^$diff) -> $d {
+						my $fn = $base ~ ".{$d + $num}";
+
+						my $fh = $fh.IO.open(:w, :bin)
+							or
+						die qq:to"ERR";
+						Could not open '{$fh}' for writing due to unexpected error.
+						ERR
+
+						@$!output_data.push($fh); 
+					}
+				}
+			}
+		}
+	}
+
+	# If output type is WAV then we use @interleve_block;
+	my @interleve_block;
+	if $!output_type eq 'wav' {
+		@interleve_block = [Z](|@channels).flat;
+	}
+
+	# cw: -XXX- Then this entire block needs to be rethought.
+	for @$!output_data -> $od {
+		given $od {
+			when IO::Handle {
+				$od.write($block);
+			}
+
+			when Buf {
+				# cw: Could use ~=, but don't want new object.
+				$od.push($block);
+			}
 		}
 	}
 
 }
 
-multi method !actual_decode($id, $od) {
+multi method !actual_decode($id, $od, *%opts) {
 	$!input_data = $id;
-	$!output_data = $od;
 	$!input_offset = 0;
+	$!output_type = (%opts<output>:v || 'raw').lc;
+
+	# cw: Will always be an array ref, although will contain single output 
+	#     in the case that OUTPUT option is 'WAV'
+	#
+	#	  In the case where we are decoding directly into memory, the $od
+	#
+	$!output_data = [$od];
 
 	# cw:
 	# In the case of large files, we really 
@@ -243,7 +294,7 @@ multi method !actual_decode($id, $od) {
 		                  	# Keep channels separate, interleve or both? 
 		                  	# Probably should be an option, which means
 		                  	# the write routine will need to be more complex.
-		                  	writeOutputBlock();
+		                  	writeOutputBlock(@channels);
 		                  
 		                  	vorbis_synthesis_read($vd, $bout);
 	                  	}            
@@ -279,38 +330,48 @@ multi method !actual_decode($id, $od) {
 		bitrate			=> $vi.bitrate,
 		comments 		=> @uc,
 		vendor			=> $vc.vendor,
+		size			=> $.bytes_io
 	}
 
 	if $!input_data ~~ Blob {
-		# cw: -XXX- Add binary data to return value.
-	} else {
-		# cw: -XXX- Add output file size. 
+		%return_val{buffers} = $.output_data;
 	}
+
+	return %return_val;
 }
 
 # cw: Decode file on disk.
-multi method decode(IO::Handle $fr, IO:Hanlde $fw) {
-	.actual_decode($fr, $fw);
+multi method decode(IO::Handle $fr, IO:Hanlde $fw, *%opts) {
+	.actual_decode($fr, $fw, %opts);
 }
 
 # cw: Decode file on disk.
-multi method decode(Str $fn) {
+multi method decode(Str $fn, *%opts) {
 	# check for existence or throw exception
 	die "File $fn not found" unless $fn.IO.e;
 
-	# Not a WAV because there won't be a header.
-	my $fno = $fn ~~ s/ '.' .+ $/.raw/;
+	# By default output raw stream. 
+	# Raw output in file mode will output one stream per file.
+	# 	The default method for this method will output streams with the
+	#	.raw extension followed by the channel number: .1, .2, etc
+	# 
+	# Use %opts to specify output as WAV (EXPERIMENTAL)
+	my $ext =  %opts<output>:v eq 'wav' ?? 'wav' !! 'raw.1';
+	my $fno = $fn ~~ s/ '.' .+ $/.$ext/;
 
 	my $fhi = $fn.IO.open :r, :bin;
 	my $fho = open($fno, :w, :bin);
 	die "Can't open output file!" unless $fho;
 
-	.decode: $fhi, $fho;
+	.decode($fhi, $fho, %opts);
 }
 
-# cw: Decode data in memory. Returns Blob.
-multi method decode(Blob $b) {
-	.actual_decode($b, Nil);
+# cw: Decode data in memory. Returns Buf.
+multi method decode(Blob $b, *%opts) {
+	# cw: Decoiding into memory so we create a new Buf object by default.
+	#     .actual_decode will allocate more Buf objects depending on the
+	#     number of channels, but we know we will -at least- need the one.
+	.actual_decode($b, Buf[int16].new(), %opts);
 }
 
 
