@@ -103,42 +103,56 @@ method writeOutputBlocks(@output_blocks) {
 		}
 	}
 
-	given $!output_type {
+	for $!output_type -> $ot {
+		given $!ot {
 
-		when 'wav' {
-			# If output type is WAV then we use @interleve_block;
-			# cw: -XXX- check to see if [Z] works with CArray
-			my @interleve_blocks = [Z](|@output_blocks).flat;
-			my $newbuf = Buf[int16].new(@interleve_blocks)
-			given $!output_data[0] {
-				when IO::Handle {
-					$!output_data[0].write($newbuf);
-				}
-
-				when Buf {
-					$od.push(Buf[int16].new($newbuf);
-				}
-			}
-		}
-		
-		when 'raw' {
-			for @output_blocks:kv -> $c, $b {
-				my $block = Buf[int16].new(@$b);
-				given $!output_data[$c] {
+			when 'wav' {
+				# If output type is WAV then we use @interleve_block;
+				# cw: -XXX- check to see if [Z] works with CArray
+				my @interleve_blocks = [Z](|@output_blocks).flat;
+				my $newbuf = Buf[int16].new(@interleve_blocks)
+				given $!output_data[0] {
 					when IO::Handle {
-						$od.write($block);
+						$!output_data[0].write($newbuf);
 					}
 
 					when Buf {
-						# cw: infix<~=> would work, but would create EXTRA object
-						#     so .push is more
-						$od.push($block);
+						$od.push(Buf[int16].new($newbuf);
 					}
 				}
 			}
-		}
+			
+			when 'raw' {
+				for @output_blocks:kv -> $c, $b {
+					my $block = Buf[int16].new(@$b);
+					given $!output_data[$c] {
+						when IO::Handle {
+							$od.write($block);
+						}
 
+						when Buf {
+							# cw: infix<~=> would work, but would create EXTRA object
+							#     so .push is more
+							$od.push($block);
+						}
+					}
+				}
+			}
+
+		}
 	}
+}
+
+method !initialize_output($!channels) {
+	# cw: - XXX - 
+	#     Figure out the logic hash to properly initialize channels in
+	#     ONE place.
+}
+
+method !finish_wav {
+	# Use sendfile() unless file is over 2G, then fall back to evil and inefficient:
+	# $fo.write($fi.read(BLOCKSIZE) while ! $fi.eof
+
 }
 
 multi method !actual_decode($id, $od, *%opts) {
@@ -229,6 +243,8 @@ multi method !actual_decode($id, $od, *%opts) {
 			die "Unexpected end of file while reading vorbis headers.";
 				if $!bytes_io == 0 && $i < 2;
 		}
+
+		.initialize_output($vi.channels) if ! $!output_data;
 
 		# cx: -YYY- Need to figure out what the eventual output is 
 		#     supposed to look like and include vorbis_info and 
@@ -354,6 +370,8 @@ multi method !actual_decode($id, $od, *%opts) {
 		size			=> $!bytes_io
 	}
 
+	.finish_wav if %opts<output>:v eq 'wav'
+
 	if $!input_data ~~ Blob {
 		%return_val{output_streams} = $!output_data;
 	}
@@ -377,11 +395,17 @@ multi method decode(Str $fn, *%opts) {
 	#	.raw extension followed by the channel number: .1, .2, etc
 	# 
 	# Use %opts to specify output as WAV (EXPERIMENTAL)
-	my $ext =  %opts<output>:v eq 'wav' ?? 'wav' !! 'raw.1';
+	# Due to the way the WAV file is structured, we need to write out the
+	# converted data, first. Then we need to construct the header and 
+	# prepend that to the output. So we first write to a wav.nh file 
+	# (for "no header"). 
+	my $ext =  %opts<output>:v eq 'wav' ?? 'wav.nh' !! 'raw.1';
 	my $fno = $fn ~~ s/ '.' .+ $/.$ext/;
 
-	my $fhi = $fn.IO.open :r, :bin;
-	my $fho = open($fno, :w, :bin);
+	# We open output file in rw mode, since we need to read what is sent output 
+	# for proper WAV conversion.
+	my $fhi = $fn.IO.open(:r, :bin);
+	my $fho = open($fno, :rw, :bin);
 	die "Can't open output file!" unless $fho;
 
 	.decode($fhi, $fho, %opts);
@@ -395,6 +419,13 @@ multi method decode(Blob $b, *%opts) {
 	.actual_decode($b, Buf[int16].new(), %opts);
 }
 
+# cw: Use this for appending files
+sub sendfile (
+	uint32 			!$out_fd, 
+	uint32 			!$int in_fd, 
+	Pointer[uint32] !$offset, 
+	uint32			!$count
+) is native { * };
 
 # cw: Do we -really- need instance variables of this class, or can these be static routines?
 # cw: ALSO...current interface to decode() is incomplete. We need to handle options.
