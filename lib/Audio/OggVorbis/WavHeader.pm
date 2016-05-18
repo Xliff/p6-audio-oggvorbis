@@ -6,6 +6,8 @@ use NativeCall;
 
 constant HEADER_SIZE = 44;
 
+constant PCM_TYPE = 1;
+
 has Str		$!RIFF;						# "RIFF"
 has uint32	$!file_size;
 has Str		$!WAVE;						# "WAVE"
@@ -60,6 +62,12 @@ method new (
 
 method as_blob {
 	return Blob[uint8].new(
+		nativecast(CArray[uint8], self)[^HEADER_SIZE];
+	);
+}
+
+method as_buf {
+	return Buf[uint8].new(
 		nativecast(CArray[uint8], self)[^HEADER_SIZE];
 	);
 }

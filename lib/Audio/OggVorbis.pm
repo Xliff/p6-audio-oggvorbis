@@ -15,6 +15,8 @@ has	uint64	$!input_offset;
 has uint64	$!bytes_io;
 has 		$!ogg_buffer;
 has 		$!output_type;
+has Bool    $!initialized;
+has 		$!stream_info;
 
 constant BLOCK_SIZE = 4096;
 
@@ -68,40 +70,6 @@ method writeOutputBlocks(@output_blocks) {
 	# 		The only time the number of objects in $!output_data is singular
 	#		is if we are writing WAV output. Otherwise contents will be 
 	#		an array of IO::Handles or Buf objects.
-	
-	# Check for proper initialization of $!output_data.
-	# cw: @$!output_data should have AT MOST 1 element in it, by this time. 
-	#     However, it is best avoid naked literals.
-	if $output_type eq 'raw' {
-		my $num =  @$!output_data.elems;
-		my $diff = @output_blocks.elems - $num;
-		if $diff > 0 {
-			# cw: -YYY-
-			#     Code here should only ever run ONCE. Do we need to make an explicit
-			#     check for this??
-			given $!output_data[0] {
-				when Buf {
-					# cw: Create Buf objects
-					@$!output_data.push(Buf[int16].new) for ^$diff;
-				}
-
-				when IO::Handle {
-					# Open and add IO::Handle objects
-					$base = S/'.' \d+$//;
-
-					for (^$diff) -> $d {
-						my $fn = $base ~ ".{$d + $num}";
-
-						my $fh = $fh.IO.open(:w, :bin)
-							or
-						die "Could not open '{$fh}' for writing due to unexpected error.";
-
-						@$!output_data.push($fh); 
-					}
-				}
-			}
-		}
-	}
 
 	for $!output_type -> $ot {
 		given $!ot {
@@ -143,16 +111,84 @@ method writeOutputBlocks(@output_blocks) {
 	}
 }
 
-method !initialize_output($!channels) {
-	# cw: - XXX - 
-	#     Figure out the logic hash to properly initialize channels in
-	#     ONE place.
+method !initialize_output() {
+	# No other special initialization if performing WAV decode.
+	return if $!output_type eq 'wav';
+
+	my $diff = $stream_info.info.channels - @$!output_data.elems;
+	if $diff > 0 {
+		given $!output_data[0] {
+			when Buf {
+				# cw: Create Buf objects
+				@$!output_data.push(Buf[int16].new xx $diff);
+			}
+
+			when IO::Handle {
+				# Open and add IO::Handle objects
+				$base = S/'.' \d+$//;
+
+				for (^$diff) -> $d {
+					my $fn = $base ~ ".{$d + $num}";
+
+					my $fh = $fh.IO.open(:w, :bin)
+						or
+					die "Could not open '{$fh}' for writing due to unexpected error.";
+
+					@$!output_data.push($fh); 
+				}
+			}
+		}
+	}
+
 }
 
 method !finish_wav {
-	# Use sendfile() unless file is over 2G, then fall back to evil and inefficient:
-	# $fo.write($fi.read(BLOCKSIZE) while ! $fi.eof
+	# Create and write WAV header.
+	my $wav_header = Audio::OggVorbis::WavHeader.new(
+		:$file_size($bytes_io),
+		:$fmttype(PCM_TYPE),
+		:$channels($.stream_info.info.channels),
+		:$rate($.stream_info.info.rate,
+		:$bps($.stream_info.info.bitrate_nominal)
+	).as_buf;
 
+	given $!output_data[0] {
+		
+		when Buf {
+			$_ = $wav_header.push($_);
+		}
+
+		when IO::Handle {
+			my $final_output_name = $_.path ~~ S/'.' nh$//;
+			my $final_output_handle = $final_output_name.IO.open(:w, :bin);
+
+			$final_output_handle.write($wav_header.as_buf);
+
+			# Use sendfile() unless file is over 2G, otherwise use perl fallback.
+			if ($bytes_io < 2 ** 32 - 1) {
+				my $rv = sendfile (
+					$final_output_handle.native-descriptor,
+					$_.native_descriptor,
+					0,
+					$!bytes_io
+				);
+
+				if ($rv < 0) {
+					my $errno := cglobal('libc.so.6', 'errno', int32)
+					die "Unexpected IO error when finalizing WAV output: $errno"; 
+				}
+			} else {
+				$_.seek(0);
+				$final_output_handle.write($_.read(BLOCK_SIZE)) 
+					while ! $_.eof;
+			}
+		}
+
+		default {
+			die "Unexpected type encountered when finalizing WAV: {$_.^name}";
+		}
+
+	}
 }
 
 multi method !actual_decode($id, $od, *%opts) {
@@ -173,6 +209,7 @@ multi method !actual_decode($id, $od, *%opts) {
 	#	  In the case where we are decoding directly into memory, the $od
 	#
 	$!output_data = [$od];
+	$!initialized = False;
 
 	# cw:
 	# In the case of large files, we really 
@@ -244,7 +281,12 @@ multi method !actual_decode($id, $od, *%opts) {
 				if $!bytes_io == 0 && $i < 2;
 		}
 
-		.initialize_output($vi.channels) if ! $!output_data;
+		$!stream_info = (
+			info => 	$vi,
+			comments => $vc
+		);
+
+		.initialize_output if ! $!initialized;
 
 		# cx: -YYY- Need to figure out what the eventual output is 
 		#     supposed to look like and include vorbis_info and 
@@ -422,7 +464,7 @@ multi method decode(Blob $b, *%opts) {
 # cw: Use this for appending files
 sub sendfile (
 	uint32 			!$out_fd, 
-	uint32 			!$int in_fd, 
+	uint32 			!$in_fd, 
 	Pointer[uint32] !$offset, 
 	uint32			!$count
 ) is native { * };
